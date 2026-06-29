@@ -85,8 +85,12 @@ export interface Subscription {
   dueDay: number
   note?: string
   color?: string
-  /** Meses pagados, en formato YYYY-MM. */
+  /** Imagen/logo del servicio (dataURL). */
+  imageDataUrl?: string
+  /** Meses pagados (total), en formato YYYY-MM. */
   paidMonths: string[]
+  /** Monto abonado por mes (YYYY-MM → importe acumulado). Permite pagos parciales. */
+  paidAmounts?: Record<string, number>
   archived?: boolean
   createdAt: string
 }

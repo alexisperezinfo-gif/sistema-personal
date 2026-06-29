@@ -79,6 +79,8 @@ interface StoreState extends AppData {
   deleteSubscription: (id: string) => void
   restoreSubscription: (subscription: Subscription, index?: number) => void
   togglePaidMonth: (id: string, month?: string) => void
+  /** Suma (o resta) un importe al monto abonado del mes. */
+  addPayment: (id: string, amount: number, month?: string) => void
   // settings
   setTheme: (theme: 'light' | 'dark') => void
   setCurrencySymbol: (symbol: string) => void
@@ -362,10 +364,31 @@ export const useStore = create<StoreState>()(
           return {
             subscriptions: s.subscriptions.map((sub) => {
               if (sub.id !== id) return sub
-              const has = sub.paidMonths.includes(key)
+              const paidAmount = sub.paidAmounts?.[key]
+              const isPaid = paidAmount != null ? paidAmount >= sub.amount : sub.paidMonths.includes(key)
               return {
                 ...sub,
-                paidMonths: has ? sub.paidMonths.filter((m) => m !== key) : [...sub.paidMonths, key],
+                paidMonths: isPaid ? sub.paidMonths.filter((m) => m !== key) : [...sub.paidMonths.filter((m) => m !== key), key],
+                paidAmounts: { ...sub.paidAmounts, [key]: isPaid ? 0 : sub.amount },
+              }
+            }),
+          }
+        }),
+      addPayment: (id, amount, month) =>
+        set((s) => {
+          const key = month ?? monthKey()
+          return {
+            subscriptions: s.subscriptions.map((sub) => {
+              if (sub.id !== id) return sub
+              const current = sub.paidAmounts?.[key] ?? (sub.paidMonths.includes(key) ? sub.amount : 0)
+              const next = Math.max(0, Math.min(current + amount, sub.amount))
+              const fullyPaid = sub.amount > 0 && next >= sub.amount
+              return {
+                ...sub,
+                paidAmounts: { ...sub.paidAmounts, [key]: next },
+                paidMonths: fullyPaid
+                  ? [...sub.paidMonths.filter((m) => m !== key), key]
+                  : sub.paidMonths.filter((m) => m !== key),
               }
             }),
           }

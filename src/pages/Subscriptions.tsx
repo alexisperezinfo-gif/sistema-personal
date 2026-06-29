@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { Plus, CreditCard, Trash2, Check, Pencil, CalendarClock } from 'lucide-react'
+import { Plus, CreditCard, Trash2, Check, Pencil, CalendarClock, ImagePlus } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { fileToResizedDataUrl } from '../lib/image'
 import {
-  cycleProgress,
+  amountProgress,
   daysUntilDue,
   dueStatus,
   isPaidThisMonth,
   monthlyTotal,
   nextDueDate,
+  paidAmountThisMonth,
 } from '../lib/subscriptions'
 import { formatCurrency, formatDate } from '../lib/format'
 import type { Subscription } from '../types'
@@ -23,6 +25,8 @@ function SubscriptionForm({ open, initial, onClose }: { open: boolean; initial: 
   const [amount, setAmount] = useState('')
   const [dueDay, setDueDay] = useState('1')
   const [note, setNote] = useState('')
+  const [image, setImage] = useState<string | undefined>()
+  const [busy, setBusy] = useState(false)
   const [seed, setSeed] = useState<string | null>(null)
 
   if (open && seed !== (initial?.id ?? 'new')) {
@@ -31,6 +35,17 @@ function SubscriptionForm({ open, initial, onClose }: { open: boolean; initial: 
     setAmount(initial ? String(initial.amount) : '')
     setDueDay(initial ? String(initial.dueDay) : '1')
     setNote(initial?.note ?? '')
+    setImage(initial?.imageDataUrl)
+  }
+
+  const handleImage = async (file?: File) => {
+    if (!file) return
+    setBusy(true)
+    try {
+      setImage(await fileToResizedDataUrl(file))
+    } finally {
+      setBusy(false)
+    }
   }
   if (!open && seed !== null) setSeed(null)
 
@@ -46,9 +61,10 @@ function SubscriptionForm({ open, initial, onClose }: { open: boolean; initial: 
         amount: amountNum,
         dueDay: dayNum,
         note: note.trim() || undefined,
+        imageDataUrl: image,
       })
     } else {
-      addSubscription({ name: name.trim(), amount: amountNum, dueDay: dayNum, note: note.trim() || undefined })
+      addSubscription({ name: name.trim(), amount: amountNum, dueDay: dayNum, note: note.trim() || undefined, imageDataUrl: image })
     }
     onClose()
   }
@@ -74,6 +90,23 @@ function SubscriptionForm({ open, initial, onClose }: { open: boolean; initial: 
           <label className="label">Nota (opcional)</label>
           <input className="input" placeholder="Ej: Plan familiar, tarjeta terminada en 1234" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
+        <div>
+          <label className="label">Imagen / logo (opcional)</label>
+          {image ? (
+            <div className="relative">
+              <img src={image} alt="" className="h-40 w-full rounded-xl object-cover" />
+              <button onClick={() => setImage(undefined)} className="absolute right-2 top-2 rounded-lg bg-slate-900/70 px-2 py-1 text-xs text-white">
+                Quitar
+              </button>
+            </div>
+          ) : (
+            <label className="flex h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 text-sm text-slate-500 transition hover:border-brand-400 hover:text-brand-600 dark:border-slate-700">
+              <ImagePlus size={24} />
+              {busy ? 'Procesando...' : 'Subir imagen'}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImage(e.target.files?.[0])} />
+            </label>
+          )}
+        </div>
         <button className="btn-primary w-full" onClick={submit} disabled={!valid}>
           {initial ? 'Guardar cambios' : 'Agregar pago'}
         </button>
@@ -82,12 +115,22 @@ function SubscriptionForm({ open, initial, onClose }: { open: boolean; initial: 
   )
 }
 
-const STATUS_STYLE: Record<ReturnType<typeof dueStatus>, { bar: string; chip: string }> = {
+type Status = ReturnType<typeof dueStatus>
+
+const STATUS_STYLE: Record<Status, { bar: string; chip: string }> = {
   paid: { bar: 'bg-emerald-500', chip: 'text-emerald-600 dark:text-emerald-400' },
   overdue: { bar: 'bg-red-500', chip: 'text-red-600 dark:text-red-400' },
   soon: { bar: 'bg-amber-500', chip: 'text-amber-600 dark:text-amber-500' },
   upcoming: { bar: 'bg-brand-500', chip: 'text-slate-500 dark:text-slate-400' },
 }
+
+/** Columnas del tablero kanban, en orden de prioridad. */
+const COLUMNS: { status: Status; title: string; dot: string }[] = [
+  { status: 'overdue', title: 'Atrasados', dot: 'bg-red-500' },
+  { status: 'soon', title: 'Por vencer', dot: 'bg-amber-500' },
+  { status: 'upcoming', title: 'Próximos', dot: 'bg-brand-500' },
+  { status: 'paid', title: 'Pagados', dot: 'bg-emerald-500' },
+]
 
 function dueLabel(sub: Subscription): string {
   if (isPaidThisMonth(sub)) return 'Pagado este mes'
@@ -96,6 +139,68 @@ function dueLabel(sub: Subscription): string {
   if (days < 0) return `Atrasado ${Math.abs(days)} día${Math.abs(days) !== 1 ? 's' : ''}`
   if (days === 1) return 'Vence mañana'
   return `Faltan ${days} días`
+}
+
+function SubscriptionCard({
+  sub,
+  symbol,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  sub: Subscription
+  symbol: string
+  onToggle: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const paid = isPaidThisMonth(sub)
+  const status = dueStatus(sub)
+  const style = STATUS_STYLE[status]
+  const pct = paid ? 100 : amountProgress(sub)
+
+  return (
+    <div className="card p-3">
+      {sub.imageDataUrl && (
+        <img src={sub.imageDataUrl} alt="" className="mb-2.5 h-24 w-full rounded-lg object-cover" />
+      )}
+      <div className="flex items-start gap-2.5">
+        <button
+          onClick={onToggle}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition active:scale-90 ${
+            paid
+              ? 'border-emerald-500 bg-emerald-500 text-white'
+              : 'border-slate-300 text-transparent hover:border-brand-400 dark:border-slate-600'
+          }`}
+          title={paid ? 'Pagado este mes' : 'Marcar como pagado'}
+        >
+          <Check size={18} strokeWidth={3} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <h3 className={`truncate font-semibold leading-tight ${paid ? 'text-slate-400' : ''}`}>{sub.name}</h3>
+          <p className="font-bold">{formatCurrency(sub.amount, symbol)}</p>
+          {sub.note && <p className="truncate text-xs text-slate-500 dark:text-slate-400">{sub.note}</p>}
+        </div>
+        <div className="flex shrink-0 flex-col gap-0.5">
+          <button onClick={onEdit} aria-label={`Editar ${sub.name}`} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+            <Pencil size={14} />
+          </button>
+          <button onClick={onDelete} aria-label={`Eliminar ${sub.name}`} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950">
+            <Trash2 size={15} />
+          </button>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+        <span className={`inline-flex items-center gap-1 font-semibold ${style.chip}`}>
+          <CalendarClock size={12} /> {dueLabel(sub)}
+        </span>
+        <span className="text-slate-400">{formatDate(nextDueDate(sub).toISOString())}</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+        <div className={`h-full rounded-full transition-all ${style.bar}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
 }
 
 export default function Subscriptions() {
@@ -118,7 +223,7 @@ export default function Subscriptions() {
 
   const total = monthlyTotal(subscriptions)
   const paidCount = subscriptions.filter((s) => isPaidThisMonth(s)).length
-  const paidAmount = subscriptions.filter((s) => isPaidThisMonth(s)).reduce((sum, s) => sum + s.amount, 0)
+  const paidAmount = subscriptions.reduce((sum, s) => sum + paidAmountThisMonth(s), 0)
 
   return (
     <div>
@@ -157,59 +262,40 @@ export default function Subscriptions() {
           action={<button className="btn-primary" onClick={() => setOpen(true)}><Plus size={18} /> Agregar pago</button>}
         />
       ) : (
-        <ul className="space-y-2.5">
-          {subscriptions.map((sub) => {
-            const paid = isPaidThisMonth(sub)
-            const status = dueStatus(sub)
-            const style = STATUS_STYLE[status]
-            const pct = paid ? 100 : cycleProgress(sub)
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 lg:grid lg:grid-cols-4 lg:overflow-visible">
+          {COLUMNS.map((col) => {
+            const items = subscriptions.filter((s) => dueStatus(s) === col.status)
             return (
-              <li key={sub.id} className="card p-4">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => togglePaidMonth(sub.id)}
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 transition active:scale-90 ${
-                      paid
-                        ? 'border-emerald-500 bg-emerald-500 text-white'
-                        : 'border-slate-300 text-transparent hover:border-brand-400 dark:border-slate-600'
-                    }`}
-                    title={paid ? 'Pagado este mes' : 'Marcar como pagado'}
-                  >
-                    <Check size={22} strokeWidth={3} />
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <h3 className={`truncate font-semibold ${paid ? 'text-slate-400' : ''}`}>{sub.name}</h3>
-                      <span className="shrink-0 font-bold">{formatCurrency(sub.amount, symbol)}</span>
-                    </div>
-                    {sub.note && <p className="truncate text-xs text-slate-500 dark:text-slate-400">{sub.note}</p>}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs">
-                      <span className={`inline-flex items-center gap-1 font-semibold ${style.chip}`}>
-                        <CalendarClock size={12} /> {dueLabel(sub)}
-                      </span>
-                      <span className="text-slate-400">Próximo: {formatDate(nextDueDate(sub).toISOString())}</span>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col gap-1">
-                    <button onClick={() => setEditing(sub)} aria-label={`Editar ${sub.name}`} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
-                      <Pencil size={15} />
-                    </button>
-                    <button onClick={() => handleDelete(sub.id)} aria-label={`Eliminar ${sub.name}`} className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+              <div key={col.status} className="flex w-72 shrink-0 flex-col lg:w-auto">
+                <div className="mb-2.5 flex items-center gap-2 px-1">
+                  <span className={`h-2.5 w-2.5 rounded-full ${col.dot}`} />
+                  <h2 className="text-sm font-semibold">{col.title}</h2>
+                  <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    {items.length}
+                  </span>
                 </div>
-                {/* Barra progresiva del ciclo mensual */}
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                  <div
-                    className={`h-full rounded-full transition-all ${style.bar}`}
-                    style={{ width: `${pct}%` }}
-                  />
+                <div className="flex flex-col gap-2.5">
+                  {items.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400 dark:border-slate-700">
+                      Sin pagos
+                    </p>
+                  ) : (
+                    items.map((sub) => (
+                      <SubscriptionCard
+                        key={sub.id}
+                        sub={sub}
+                        symbol={symbol}
+                        onToggle={() => togglePaidMonth(sub.id)}
+                        onEdit={() => setEditing(sub)}
+                        onDelete={() => handleDelete(sub.id)}
+                      />
+                    ))
+                  )}
                 </div>
-              </li>
+              </div>
             )
           })}
-        </ul>
+        </div>
       )}
 
       <SubscriptionForm open={open || !!editing} initial={editing} onClose={() => { setOpen(false); setEditing(null) }} />

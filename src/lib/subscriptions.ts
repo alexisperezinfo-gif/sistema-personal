@@ -53,8 +53,22 @@ export function cycleProgress(sub: Subscription, from: Date = new Date()): numbe
   return Math.max(0, Math.min(100, (elapsed / span) * 100))
 }
 
+/** Monto abonado en el mes indicado (con migración: meses marcados como pagados cuentan completos). */
+export function paidAmountThisMonth(sub: Subscription, from: Date = new Date()): number {
+  const key = monthKey(from)
+  const explicit = sub.paidAmounts?.[key]
+  if (explicit != null) return Math.max(0, Math.min(explicit, sub.amount))
+  return sub.paidMonths.includes(key) ? sub.amount : 0
+}
+
+/** Progreso 0–100 según el monto abonado sobre el total de la suscripción. */
+export function amountProgress(sub: Subscription, from: Date = new Date()): number {
+  if (sub.amount <= 0) return 0
+  return Math.max(0, Math.min(100, (paidAmountThisMonth(sub, from) / sub.amount) * 100))
+}
+
 export function isPaidThisMonth(sub: Subscription, from: Date = new Date()): boolean {
-  return sub.paidMonths.includes(monthKey(from))
+  return sub.amount > 0 && paidAmountThisMonth(sub, from) >= sub.amount
 }
 
 /** Total mensual de las suscripciones activas. */
