@@ -28,10 +28,15 @@ export default {
           '50%': { transform: 'scale(1.03)' },
           '100%': { transform: 'scale(1)' },
         },
+        'confetti-fall': {
+          '0%': { transform: 'translateY(-10vh) rotate(0deg)', opacity: '1' },
+          '100%': { transform: 'translateY(110vh) rotate(720deg)', opacity: '0' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.25s ease-out',
         'pop': 'pop 0.3s ease-out',
+        'confetti-fall': 'confetti-fall linear forwards',
       },
     },
   },

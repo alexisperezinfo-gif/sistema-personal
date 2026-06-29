@@ -1,14 +1,18 @@
 import { useRef, useState } from 'react'
-import { Moon, Sun, Download, Upload, Coins, Trash2, Info } from 'lucide-react'
+import { Moon, Sun, Download, Upload, Coins, Trash2, Info, Smartphone } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { exportData, importData } from '../lib/backup'
 import ConfirmDialog from '../components/ConfirmDialog'
+import InstallButton from '../components/InstallButton'
 
 export default function SettingsPage() {
   const settings = useStore((s) => s.settings)
   const goals = useStore((s) => s.goals)
   const objectives = useStore((s) => s.objectives)
   const habits = useStore((s) => s.habits)
+  const projects = useStore((s) => s.projects)
+  const timeEntries = useStore((s) => s.timeEntries)
+  const subscriptions = useStore((s) => s.subscriptions)
   const setTheme = useStore((s) => s.setTheme)
   const setCurrencySymbol = useStore((s) => s.setCurrencySymbol)
   const replaceAll = useStore((s) => s.replaceAll)
@@ -18,7 +22,7 @@ export default function SettingsPage() {
   const [confirmWipe, setConfirmWipe] = useState(false)
 
   const handleExport = () => {
-    exportData({ goals, objectives, habits, settings })
+    exportData({ goals, objectives, habits, projects, timeEntries, subscriptions, settings })
     setMsg({ type: 'ok', text: 'Respaldo descargado correctamente.' })
   }
 
@@ -35,7 +39,7 @@ export default function SettingsPage() {
   }
 
   const wipe = () => {
-    replaceAll({ goals: [], objectives: [], habits: [] })
+    replaceAll({ goals: [], objectives: [], habits: [], projects: [], timeEntries: [], subscriptions: [] })
     setConfirmWipe(false)
     setMsg({ type: 'ok', text: 'Se borraron todos los datos.' })
   }
@@ -78,6 +82,15 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* App */}
+      <section className="card p-5">
+        <h2 className="mb-1 flex items-center gap-1.5 font-bold"><Smartphone size={18} /> Aplicación</h2>
+        <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
+          Instalá Mejoría Por Chini en tu pantalla de inicio para abrirla como una app.
+        </p>
+        <InstallButton />
+      </section>
+
       {/* Datos */}
       <section className="card p-5">
         <h2 className="mb-1 font-bold">Tus datos</h2>
@@ -102,7 +115,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <p className="text-center text-xs text-slate-400">Mi Sistema Personal · v1.0</p>
+      <p className="text-center text-xs text-slate-400">Mejoría Por Chini · v1.1</p>
 
       <ConfirmDialog
         open={confirmWipe}

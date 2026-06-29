@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
-import { PiggyBank, Target, Repeat, TrendingUp, Check, ChevronRight, Trophy } from 'lucide-react'
+import { PiggyBank, Target, Repeat, TrendingUp, Check, ChevronRight, Trophy, Clock, CreditCard, CalendarClock } from 'lucide-react'
 import { useStore, goalTotal } from '../store/useStore'
-import { formatCurrency, clampPercent } from '../lib/format'
+import { formatCurrency, clampPercent, todayKey } from '../lib/format'
 import { doneToday, currentStreak } from '../lib/habits'
+import { daysUntilDue, isPaidThisMonth } from '../lib/subscriptions'
+import { formatMinutes, minutesByProject, totalMinutes } from '../lib/time'
 import ProgressBar from '../components/ProgressBar'
 
 const MOTIVATION = [
@@ -31,8 +33,15 @@ export default function Dashboard() {
   const goals = useStore((s) => s.goals)
   const objectives = useStore((s) => s.objectives)
   const habits = useStore((s) => s.habits)
+  const projects = useStore((s) => s.projects)
+  const timeEntries = useStore((s) => s.timeEntries)
+  const subscriptions = useStore((s) => s.subscriptions)
   const symbol = useStore((s) => s.settings.currencySymbol)
   const toggleHabit = useStore((s) => s.toggleHabitToday)
+
+  const todayEntries = timeEntries.filter((e) => e.date === todayKey())
+  const timeToday = totalMinutes(todayEntries)
+  const todayByProject = minutesByProject(todayEntries)
 
   const totalSaved = goals.reduce((sum, g) => sum + goalTotal(g), 0)
   const activeObjectives = objectives.filter((o) => o.status !== 'logrado').length
@@ -45,6 +54,12 @@ export default function Dashboard() {
     .map((g) => ({ g, pct: g.targetAmount > 0 ? (goalTotal(g) / g.targetAmount) * 100 : 0 }))
     .sort((a, b) => b.pct - a.pct)
     .slice(0, 3)
+
+  const upcomingPayments = [...subscriptions]
+    .filter((s) => !s.archived && !isPaidThisMonth(s))
+    .map((s) => ({ s, days: daysUntilDue(s) }))
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 4)
 
   const motivation = MOTIVATION[new Date().getDate() % MOTIVATION.length]
   const hour = new Date().getHours()
@@ -123,6 +138,70 @@ export default function Dashboard() {
                     </button>
                     <span className="flex-1 text-sm font-medium">{h.title}</span>
                     {streak > 0 && <span className="text-xs font-semibold text-orange-500">🔥 {streak}</span>}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* Tiempo de hoy */}
+      {projects.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold">Tiempo de hoy</h2>
+            <Link to="/tiempo" className="flex items-center text-sm font-medium text-brand-600 hover:underline">Ver detalle <ChevronRight size={16} /></Link>
+          </div>
+          <Link to="/tiempo" className="card block p-4 transition hover:shadow-md">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400"><Clock size={15} /> Registrado hoy</span>
+              <span className="text-sm font-bold text-brand-600 dark:text-brand-300">{formatMinutes(timeToday)}</span>
+            </div>
+            {timeToday === 0 ? (
+              <p className="text-sm text-slate-400">Todavía no registraste tiempo. Tocá para empezar.</p>
+            ) : (
+              <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                {projects
+                  .filter((p) => (todayByProject.get(p.id) ?? 0) > 0)
+                  .map((p) => (
+                    <div key={p.id} style={{ backgroundColor: p.color, width: `${((todayByProject.get(p.id) ?? 0) / timeToday) * 100}%` }} title={`${p.name}: ${formatMinutes(todayByProject.get(p.id) ?? 0)}`} />
+                  ))}
+              </div>
+            )}
+          </Link>
+        </section>
+      )}
+
+      {/* Próximos pagos */}
+      {subscriptions.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold">Próximos pagos</h2>
+            <Link to="/pagos" className="flex items-center text-sm font-medium text-brand-600 hover:underline">Ver todos <ChevronRight size={16} /></Link>
+          </div>
+          {upcomingPayments.length === 0 ? (
+            <div className="card px-4 py-6 text-center text-sm font-medium text-emerald-600">
+              ¡Pagaste todas tus suscripciones de este mes! 🎉
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {upcomingPayments.map(({ s, days }) => {
+                const urgent = days <= 0
+                const soon = days > 0 && days <= 5
+                return (
+                  <li key={s.id} className="card flex items-center gap-3 p-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300">
+                      <CreditCard size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{s.name}</p>
+                      <p className={`flex items-center gap-1 text-xs font-semibold ${urgent ? 'text-red-600 dark:text-red-400' : soon ? 'text-amber-600 dark:text-amber-500' : 'text-slate-400'}`}>
+                        <CalendarClock size={11} />
+                        {days < 0 ? `Atrasado ${Math.abs(days)}d` : days === 0 ? 'Vence hoy' : days === 1 ? 'Mañana' : `En ${days} días`}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm font-bold">{formatCurrency(s.amount, symbol)}</span>
                   </li>
                 )
               })}

@@ -1,13 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Pencil, Trophy, PiggyBank, ImagePlus } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Pencil, Trophy, PiggyBank, ImagePlus, TrendingUp, CalendarClock } from 'lucide-react'
 import { useStore, goalTotal } from '../store/useStore'
 import { formatCurrency, formatDate, todayKey, clampPercent } from '../lib/format'
+import { savedThisMonth, savingProjection } from '../lib/savings'
 import { fileToResizedDataUrl } from '../lib/image'
 import type { Contribution } from '../types'
 import ProgressBar from '../components/ProgressBar'
 import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Confetti from '../components/Confetti'
+import { useToast } from '../components/Toast'
 
 export default function SavingGoalDetail() {
   const { id } = useParams()
@@ -19,12 +22,27 @@ export default function SavingGoalDetail() {
   const deleteContribution = useStore((s) => s.deleteContribution)
   const updateGoal = useStore((s) => s.updateGoal)
   const deleteGoal = useStore((s) => s.deleteGoal)
+  const restoreGoal = useStore((s) => s.restoreGoal)
+  const restoreContribution = useStore((s) => s.restoreContribution)
+  const toast = useToast()
 
   const [addOpen, setAddOpen] = useState(false)
   const [editGoalOpen, setEditGoalOpen] = useState(false)
   const [editContrib, setEditContrib] = useState<Contribution | null>(null)
   const [delContrib, setDelContrib] = useState<string | null>(null)
   const [delGoalOpen, setDelGoalOpen] = useState(false)
+  const [celebrate, setCelebrate] = useState(false)
+
+  // Dispara confeti al pasar de "no logrado" a "logrado".
+  const wasAchieved = useRef<boolean | null>(null)
+  const isAchieved = !!goal?.achievedAt
+  useEffect(() => {
+    if (wasAchieved.current === false && isAchieved) {
+      setCelebrate(true)
+      toast.notify('🎉 ¡Meta lograda! Felicitaciones')
+    }
+    if (goal) wasAchieved.current = isAchieved
+  }, [isAchieved, goal, toast])
 
   if (!goal) {
     return (
@@ -39,9 +57,12 @@ export default function SavingGoalDetail() {
   const percent = goal.targetAmount > 0 ? (saved / goal.targetAmount) * 100 : 0
   const remaining = Math.max(0, goal.targetAmount - saved)
   const achieved = !!goal.achievedAt
+  const thisMonth = savedThisMonth(goal)
+  const projection = achieved ? null : savingProjection(goal)
 
   return (
     <div>
+      <Confetti active={celebrate} />
       <button onClick={() => navigate('/metas')} className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-brand-600">
         <ArrowLeft size={16} /> Volver
       </button>
@@ -91,6 +112,34 @@ export default function SavingGoalDetail() {
           </button>
         </div>
       </div>
+
+      {/* Resumen y proyección */}
+      {!achieved && (goal.contributions.length > 0) && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="card flex items-center gap-3 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-300">
+              <TrendingUp size={18} />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-base font-bold leading-tight">{formatCurrency(thisMonth, symbol)}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Ahorrado este mes</p>
+            </div>
+          </div>
+          {projection && projection.etaDate && (
+            <div className="card flex items-center gap-3 p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-600 dark:bg-brand-900/50 dark:text-brand-300">
+                <CalendarClock size={18} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-base font-bold leading-tight">{formatDate(projection.etaDate.toISOString())}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  A tu ritmo (~{formatCurrency(Math.round(projection.monthlyRate), symbol)}/mes)
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Historial */}
       <h2 className="mb-3 mt-7 text-lg font-bold">Historial de aportes</h2>
@@ -146,14 +195,30 @@ export default function SavingGoalDetail() {
         open={!!delContrib}
         message="¿Eliminar este aporte? El saldo se recalculará."
         onCancel={() => setDelContrib(null)}
-        onConfirm={() => { if (delContrib) deleteContribution(goal.id, delContrib); setDelContrib(null) }}
+        onConfirm={() => {
+          if (delContrib) {
+            const index = goal.contributions.findIndex((c) => c.id === delContrib)
+            const contribution = goal.contributions[index]
+            deleteContribution(goal.id, delContrib)
+            if (contribution) {
+              toast.notifyUndo('Aporte eliminado', () => restoreContribution(goal.id, contribution, index))
+            }
+          }
+          setDelContrib(null)
+        }}
       />
       <ConfirmDialog
         open={delGoalOpen}
         title="Eliminar meta"
-        message="Se eliminará la meta y todo su historial. Esta acción no se puede deshacer."
+        message="Se eliminará la meta y todo su historial."
         onCancel={() => setDelGoalOpen(false)}
-        onConfirm={() => { deleteGoal(goal.id); navigate('/metas') }}
+        onConfirm={() => {
+          const index = useStore.getState().goals.findIndex((g) => g.id === goal.id)
+          const snapshot = goal
+          deleteGoal(goal.id)
+          toast.notifyUndo(`Se eliminó "${snapshot.title}"`, () => restoreGoal(snapshot, index))
+          navigate('/metas')
+        }}
       />
     </div>
   )
@@ -193,6 +258,18 @@ function ContributionForm({
         <div>
           <label className="label">Monto</label>
           <input className="input text-lg" type="number" inputMode="decimal" placeholder="0" autoFocus value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {[1000, 5000, 10000, 50000].map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => setAmount(String((Number(amount) || 0) + q))}
+                className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-900/40"
+              >
+                +{q.toLocaleString('es-AR')}
+              </button>
+            ))}
+          </div>
         </div>
         <div>
           <label className="label">Fecha</label>

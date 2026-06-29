@@ -23,9 +23,12 @@ export async function importData(file: File): Promise<Partial<AppData>> {
   if (Array.isArray(parsed.goals)) result.goals = parsed.goals
   if (Array.isArray(parsed.objectives)) result.objectives = parsed.objectives
   if (Array.isArray(parsed.habits)) result.habits = parsed.habits
+  if (Array.isArray(parsed.projects)) result.projects = parsed.projects
+  if (Array.isArray(parsed.timeEntries)) result.timeEntries = parsed.timeEntries
+  if (Array.isArray(parsed.subscriptions)) result.subscriptions = parsed.subscriptions
   if (parsed.settings && typeof parsed.settings === 'object') result.settings = parsed.settings
-  if (!result.goals && !result.objectives && !result.habits) {
-    throw new Error('El archivo no parece un respaldo válido de Mi Sistema Personal.')
+  if (!result.goals && !result.objectives && !result.habits && !result.projects && !result.timeEntries && !result.subscriptions) {
+    throw new Error('El archivo no parece un respaldo válido de Mejoría Por Chini.')
   }
   return result
 }

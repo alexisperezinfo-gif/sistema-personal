@@ -23,7 +23,16 @@ export function todayKey(): string {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10)
 }
 
+/** YYYY-MM para el mes local actual (o el de una fecha dada). */
+export function monthKey(date: Date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
 export function uid(): string {
+  const c = globalThis.crypto
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID()
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 }
 

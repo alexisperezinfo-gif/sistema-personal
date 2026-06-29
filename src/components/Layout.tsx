@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, PiggyBank, Target, Repeat, Settings, Moon, Sun } from 'lucide-react'
+import { LayoutDashboard, PiggyBank, Target, Repeat, Clock, CreditCard, Settings, Moon, Sun } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useStore } from '../store/useStore'
 
@@ -8,6 +8,8 @@ const NAV = [
   { to: '/metas', label: 'Ahorro', icon: PiggyBank },
   { to: '/objetivos', label: 'Objetivos', icon: Target },
   { to: '/habitos', label: 'Hábitos', icon: Repeat },
+  { to: '/tiempo', label: 'Tiempo', icon: Clock },
+  { to: '/pagos', label: 'Pagos', icon: CreditCard },
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
 ]
 
@@ -31,10 +33,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       {/* Sidebar (desktop) */}
       <aside className="sticky top-0 hidden h-[100dvh] w-60 shrink-0 flex-col border-r border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 sm:flex">
         <div className="mb-6 flex items-center gap-2 px-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white">
-            <PiggyBank size={20} />
-          </div>
-          <span className="font-bold leading-tight">Mi Sistema<br /><span className="text-xs font-medium text-slate-400">Personal</span></span>
+          <img src="./favicon.svg" alt="Mejoría Por Chini" className="h-9 w-9 rounded-xl shadow-sm" />
+          <span className="font-bold leading-tight">Mejoría<br /><span className="text-xs font-medium text-slate-400">Por Chini</span></span>
         </div>
         <nav className="flex flex-1 flex-col gap-1">
           {NAV.map(({ to, label, icon: Icon, end }) => (
@@ -65,10 +65,8 @@ export default function Layout({ children }: { children: ReactNode }) {
         {/* Topbar (mobile) */}
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80 sm:hidden">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">
-              <PiggyBank size={17} />
-            </div>
-            <span className="font-bold">Mi Sistema</span>
+            <img src="./favicon.svg" alt="Mejoría Por Chini" className="h-8 w-8 rounded-lg shadow-sm" />
+            <span className="font-bold">Mejoría Por Chini</span>
           </div>
           <ThemeToggle />
         </header>
@@ -77,7 +75,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
 
       {/* Bottom nav (mobile) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-7 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:hidden">
         {NAV.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}

@@ -17,8 +17,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
       },
       manifest: {
-        name: 'Mi Sistema Personal',
-        short_name: 'Mi Sistema',
+        name: 'Mejoría Por Chini',
+        short_name: 'Mejoría Por Chini',
         description: 'Metas de ahorro, objetivos y hábitos personales',
         lang: 'es',
         theme_color: '#6366f1',
