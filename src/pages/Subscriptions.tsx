@@ -141,18 +141,70 @@ function dueLabel(sub: Subscription): string {
   return `Faltan ${days} días`
 }
 
+function PaymentForm({ sub, onClose }: { sub: Subscription | null; onClose: () => void }) {
+  const addPayment = useStore((s) => s.addPayment)
+  const symbol = useStore((s) => s.settings.currencySymbol)
+  const [amount, setAmount] = useState('')
+  const [seed, setSeed] = useState<string | null>(null)
+
+  const open = !!sub
+  if (open && seed !== sub!.id) {
+    setSeed(sub!.id)
+    const remaining = Math.max(0, sub!.amount - paidAmountThisMonth(sub!))
+    setAmount(remaining > 0 ? String(remaining) : '')
+  }
+  if (!open && seed !== null) setSeed(null)
+
+  if (!sub) return null
+  const already = paidAmountThisMonth(sub)
+  const remaining = Math.max(0, sub.amount - already)
+  const amountNum = parseFloat(amount.replace(',', '.'))
+  const valid = isFinite(amountNum) && amountNum > 0
+
+  const submit = () => {
+    if (!valid) return
+    addPayment(sub.id, amountNum)
+    onClose()
+  }
+
+  return (
+    <Modal open={open} title={`Abonar — ${sub.name}`} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+          <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Abonado este mes</span><span className="font-semibold">{formatCurrency(already, symbol)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Falta</span><span className="font-semibold">{formatCurrency(remaining, symbol)}</span></div>
+        </div>
+        <div>
+          <label className="label">Monto a abonar ({symbol})</label>
+          <input className="input" inputMode="decimal" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+        </div>
+        {remaining > 0 && (
+          <button className="btn-ghost w-full" onClick={() => setAmount(String(remaining))}>
+            Pagar lo que falta ({formatCurrency(remaining, symbol)})
+          </button>
+        )}
+        <button className="btn-primary w-full" onClick={submit} disabled={!valid}>
+          Registrar pago
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 function SubscriptionCard({
   sub,
   symbol,
   onToggle,
   onEdit,
   onDelete,
+  onPay,
 }: {
   sub: Subscription
   symbol: string
   onToggle: () => void
   onEdit: () => void
   onDelete: () => void
+  onPay: () => void
 }) {
   const paid = isPaidThisMonth(sub)
   const status = dueStatus(sub)
@@ -199,6 +251,16 @@ function SubscriptionCard({
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
         <div className={`h-full rounded-full transition-all ${style.bar}`} style={{ width: `${pct}%` }} />
       </div>
+      <div className="mt-1.5 flex items-center justify-between text-xs">
+        <span className="text-slate-500 dark:text-slate-400">
+          {formatCurrency(paidAmountThisMonth(sub), symbol)} de {formatCurrency(sub.amount, symbol)}
+        </span>
+        {!paid && (
+          <button onClick={onPay} className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+            + Abonar
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -212,6 +274,7 @@ export default function Subscriptions() {
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Subscription | null>(null)
+  const [paying, setPaying] = useState<Subscription | null>(null)
 
   const handleDelete = (id: string) => {
     const index = subscriptions.findIndex((s) => s.id === id)
@@ -288,6 +351,7 @@ export default function Subscriptions() {
                         onToggle={() => togglePaidMonth(sub.id)}
                         onEdit={() => setEditing(sub)}
                         onDelete={() => handleDelete(sub.id)}
+                        onPay={() => setPaying(sub)}
                       />
                     ))
                   )}
@@ -299,6 +363,7 @@ export default function Subscriptions() {
       )}
 
       <SubscriptionForm open={open || !!editing} initial={editing} onClose={() => { setOpen(false); setEditing(null) }} />
+      <PaymentForm sub={paying} onClose={() => setPaying(null)} />
     </div>
   )
 }
